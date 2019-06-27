@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>Transcriptron - Transcription</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <link rel='stylesheet' type='text/css' media='screen' href='main.css'>
+    <script src="https://cdn.webrtc-experiment.com/MediaStreamRecorder.js"></script>
+    <script
+        src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+        crossorigin="anonymous"></script>
+    <script src='main.js'></script>
+</head>
+<body>
+    <canvas height="200" id="waveform"></canvas>
+    <button disabled class="controls" id="start">Start</button>
+    <button disabled class="controls" id="stop">Stop</button>
+    <button disabled class="controls" id="save">Download a Copy</button>
+    <br>
+    <audio id="player" controls></audio>
+</body>
+</html>
