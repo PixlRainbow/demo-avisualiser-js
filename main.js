@@ -15,7 +15,6 @@ var destination;
 var scriptNode;
 var bufferCopyNode;
 var encoder;
-var decoder;
 var drawBuffer = new Float32Array(2**14);
 //var blobBuffer = [];
 var audioBuffer = [];
@@ -105,7 +104,6 @@ function decode_opus(buf){
  * @param {Float32Array} buf PCM audio
  */
 function dispatch_packet_ready(buf){
-    //encoder.encode(buf);
     var packetAvailable = new CustomEvent("packetAvailable",{
         detail: {
             wavData: buf
@@ -121,9 +119,6 @@ function dispatch_packet_ready(buf){
 function process_packet(event){
     var value = event.detail.wavData;
     audioBuffer.push(value);
-    //console.dir(done);
-    //console.dir(value);
-    //value = value.slice((value.length/2 - 1) | 0);
     drawBuffer.copyWithin(0, value.length/4 - 1);
     //drawBuffer.set(value, drawBuffer.length - value.length);
     var offset = drawBuffer.length - value.length;
@@ -135,17 +130,6 @@ function process_packet(event){
 }
 
 function init_record(stream){
-    /* mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.mimeType = 'audio/wav';
-    mediaRecorder.ondataavailable = async function(event) {
-        try{
-        var blob = event.data;
-        var reader = await (new Response(blob)).body.getReader();
-        reader.read().then(process_packet);
-        } catch (e){console.dir(e);}
-        blobBuffer.push(blob);
-    }; */
-
     $(".controls").removeAttr("disabled");
 
     $("#stop").click(function(){
@@ -157,10 +141,6 @@ function init_record(stream){
         audioCtx.suspend();
 
         $("#start").removeAttr("disabled");
-
-        /*ConcatenateBlobs(blobBuffer, blobBuffer[0].type, function(playbackBuffer){
-            $("#player").attr("src", URL.createObjectURL(playbackBuffer));
-        });*/
     });
     $("#start").click(async function(){
         //https://developers.google.com/web/updates/2017/09/autoplay-policy-changes#webaudio
@@ -190,7 +170,6 @@ function init_record(stream){
                 source.connect(scriptNode);
             }
             destination = audioCtx.createMediaStreamDestination();
-            //scriptNode.connect(destination);
             audioCtx.addEventListener("packetAvailable", process_packet);
 
             mediaRecorder = new MediaRecorder(destination.stream);
@@ -240,7 +219,6 @@ function init_record(stream){
         $(this).attr("disabled","");
     });
     $("#save").click(function(){
-        //mediaRecorder.save();
         var downloadURL = $("#player").attr("src");
         if(downloadURL != null && downloadURL != "")
             downloadFile(downloadURL);
