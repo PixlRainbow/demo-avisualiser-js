@@ -1,36 +1,64 @@
-var WIDTH = 300,
+var WIDTH = 400,
     HEIGHT = 200;
 
-var mediaConstraints = {
-    audio: {
-        sampleRate: 16000,
-        channelCount: 1
-    }
+var encodingOptions = {
+    sampleRate: 16000,
+    channelCount: 1
+};
+var audioOnly = {
+    audio: encodingOptions
 };
 var mediaRecorder;
-var arrayBuffer = new Uint8Array(65536 * 4);
-var blobBuffer = [];
+var audioCtx;
+var source;
+var destination;
+var scriptNode;
+var encoder;
+var decoder;
+var drawBuffer = new Float32Array(2**14);
+//var blobBuffer = [];
+var audioBuffer = [];
+var mergedAudioBuffer;
 var first_sample = true;
+var first_click = true;
 var canvasCtx;
 
 function display_warning(text){
     var message_box = $("<div></div>");
     message_box.addClass("alert");
     message_box.text(text);
+    message_box.click(function(){
+        $(this).remove();
+    });
     $("body").prepend(message_box);
 }
 
-function draw(drawbuffer){
+function merge_arrays(arr_of_arr){
+    var len = 0;
+    var offset = 0;
+    arr_of_arr.forEach(arr => {
+        len += arr.length;
+    });
+    var mergedArr = new Float32Array(len);
+    arr_of_arr.forEach(arr => {
+        mergedArr.set(arr, offset);
+        offset += arr.length;
+    });
+    //console.dir(mergedArr);
+    return mergedArr;
+}
+
+function draw(drawbuf){
     var drawVisual = requestAnimationFrame(draw);
 
     canvasCtx.lineWidth = 1;
     canvasCtx.strokeStyle = 'rgb(0,0,0)';
     canvasCtx.beginPath();
 
-    var sliceWidth = WIDTH * 1.0 / drawbuffer.length;
+    var sliceWidth = WIDTH * 1.0 / drawbuf.length;
     var x = 0;
-    for(var i = 0; i < drawbuffer.length; i++){
-        var v = drawbuffer[i] / 32768.0 + 1.0;
+    for(var i = 0; i < drawbuf.length; i++){
+        var v = drawbuf[i] + 1.0;
         var y = v * HEIGHT/2;
 
         if(i === 0)
@@ -43,52 +71,158 @@ function draw(drawbuffer){
     canvasCtx.stroke();
 }
 
-function process_packet({done, value}){
+function draw_time(event){
+    if(!event.target)
+        return;
+    var duration = event.target.duration;
+    var curTime = event.target.currentTime;
+    var x = (curTime/duration) * WIDTH;
+
+    var drawVisual = requestAnimationFrame(draw_time);
+
+    canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
+    canvasCtx.lineWidth = 1;
+    canvasCtx.strokeStyle = 'rgb(255,0,0)';
+    canvasCtx.beginPath();
+    canvasCtx.moveTo(x, 0);
+    canvasCtx.lineTo(x, HEIGHT);
+    canvasCtx.stroke();
+    //draw(merge_arrays(audioBuffer));
+    draw(mergedAudioBuffer);
+}
+
+/**
+ * @returns {Promise<AudioBuffer>} PCM encoded audio
+ * @param {ArrayBuffer} buf Opus encoded audio
+ */
+function decode_opus(buf){
+    return audioCtx.decodeAudioData(buf);
+}
+
+/**
+ * @summary listen to event "decodeDone" to catch this event
+ * @param {ArrayBuffer} buf PCM encoded audio with WAV header
+ */
+function dispatch_wav_ready(buf){
+    encoder.encode(buf);
+    var decodeDone = new CustomEvent("decodeDone",{
+        detail: {
+            wavData: encoder.finish()
+        }
+    });
+    mediaRecorder.dispatchEvent(decodeDone);
+}
+
+function process_packet(value){
+    audioBuffer.push(new Float32Array(value));
     //console.dir(done);
     //console.dir(value);
-    value = value.slice((value.length/2 - 1) | 0);
-    arrayBuffer.copyWithin(0, value.length/4 - 1);
-    //arrayBuffer.set(value, arrayBuffer.length - value.length);
-    var offset = arrayBuffer.length - value.length;
+    //value = value.slice((value.length/2 - 1) | 0);
+    drawBuffer.copyWithin(0, value.length/4 - 1);
+    //drawBuffer.set(value, drawBuffer.length - value.length);
+    var offset = drawBuffer.length - value.length;
     for(var i = 0; i < value.length; i+=4){
-        arrayBuffer[offset + i/4] = value[i];
+        drawBuffer[offset + i/4] = value[i];
     }
     canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
-    draw(new Int16Array(arrayBuffer.buffer));
+    draw(drawBuffer);
 }
 
 function init_record(stream){
-    mediaRecorder = new MediaRecorder(stream);
+    /* mediaRecorder = new MediaRecorder(stream);
     mediaRecorder.mimeType = 'audio/wav';
-    mediaRecorder.ondataavailable = async function(blob) {
+    mediaRecorder.ondataavailable = async function(event) {
+        try{
+        var blob = event.data;
         var reader = await (new Response(blob)).body.getReader();
         reader.read().then(process_packet);
+        } catch (e){console.dir(e);}
         blobBuffer.push(blob);
-    };
+    }; */
 
     $(".controls").removeAttr("disabled");
 
     $("#stop").click(function(){
+        scriptNode.disconnect(destination);
         mediaRecorder.stop();
+        audioCtx.suspend();
+
         $("#start").removeAttr("disabled");
 
-        ConcatenateBlobs(blobBuffer, blobBuffer[0].type, function(playbackBuffer){
+        /*ConcatenateBlobs(blobBuffer, blobBuffer[0].type, function(playbackBuffer){
             $("#player").attr("src", URL.createObjectURL(playbackBuffer));
-        });
+        });*/
     });
     $("#start").click(function(){
+        //https://developers.google.com/web/updates/2017/09/autoplay-policy-changes#webaudio
+        //workaround: only construct AudioContext after user interaction
+        if(first_click){
+            audioCtx = new AudioContext(encodingOptions);
+            source = audioCtx.createMediaStreamSource(stream);
+            scriptNode = audioCtx.createScriptProcessor(512, 1, 1);
+            scriptNode.onaudioprocess = function(event){
+                var inputData = event.inputBuffer.getChannelData(0);
+                var outputData = event.outputBuffer.getChannelData(0);
+                if(first_sample){
+                    console.dir(inputData);
+                    first_sample = false;
+                }
+                process_packet(inputData);
+                outputData.set(inputData);
+            };
+            destination = audioCtx.createMediaStreamDestination();
+            source.connect(scriptNode);
+            //scriptNode.connect(destination);
+            
+
+            mediaRecorder = new MediaRecorder(destination.stream);
+            mediaRecorder.ondataavailable = function(event){
+                var blob = event.data;
+                //blobBuffer.push(blob);
+                new Response(blob)
+                    .arrayBuffer()
+                    .then(decode_opus)
+                    .then(function(data) {
+                        console.dir(data);
+                        encoder.encode([data.getChannelData(0)]);
+                        var outBlob = encoder.finish();
+                        console.dir(outBlob);
+                        mergedAudioBuffer = merge_arrays(audioBuffer);
+                        $("#player").attr("src", URL.createObjectURL(outBlob));
+                    }).catch(failed_record);
+            };
+
+            first_click = false;
+        }else{
+            audioCtx.resume();
+        }
+
         //clear buffer and canvas
         canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
-        arrayBuffer.fill(0);
-        blobBuffer = [];
-        draw(arrayBuffer);
+        drawBuffer.fill(0);
+        //blobBuffer = [];
+        audioBuffer = [];
+        draw(drawBuffer);
+
+        $("#player").attr("src","");
+
+        /*
+        WavAudioEncoder.js:
+        "once it has completed packaging a WAV
+         it cannot be reused and must be re-constructed"
+        */
+        encoder = new WavAudioEncoder(16000, 1);
 
         //start record and prevent re-click
-        mediaRecorder.start(50);
+        scriptNode.connect(destination);
+        mediaRecorder.start();
         $(this).attr("disabled","");
     });
     $("#save").click(function(){
-        mediaRecorder.save();
+        //mediaRecorder.save();
+        var downloadURL = $("#player").attr("src");
+        if(downloadURL != null && downloadURL != "")
+            downloadFile(downloadURL);
     });
 }
 
@@ -98,15 +232,15 @@ function failed_record(e){
 }
 
 $(document).ready(function(){
-    $(".alert").click(function(){
-        $(this).remove();
-        console.log(this);
-    });
+    var canvasElem = $("#waveform")[0];
+    canvasElem.width = WIDTH;
+    canvasElem.height = HEIGHT;
+    canvasCtx = canvasElem.getContext("2d");
 
-    canvasCtx = $("#waveform")[0].getContext("2d");
+    $("#player").on("timeupdate", draw_time);
     
     if(navigator.mediaDevices.getSupportedConstraints()["sampleRate"]){
-        navigator.mediaDevices.getUserMedia(mediaConstraints)
+        navigator.mediaDevices.getUserMedia(audioOnly)
             .then(init_record)
             .catch(failed_record);
     }
