@@ -22,5 +22,25 @@
     <button disabled class="controls" id="save">Download a Copy</button>
     <br>
     <audio id="player" controls></audio>
+    <div>
+        <label for="skip_samples">skip_samples</label>
+        <input name="skip_samples" id="skip_samples" type="number" value=4>
+        <label for="buffersize">audioBuffer_size</label>
+        <select name="buffersize" id="buffersize">
+            <option>512</option>
+            <option selected>1024</option>
+            <option>2048</option>
+        </select>
+        <p>
+            skip_samples controls how many samples to skip for every sample when drawing.
+            May also affect movement speed.
+            Must be a power of 2.
+        </p>
+        <p>
+            audioBuffer_size controls how many samples to buffer before drawing.
+            Smaller values improve smoothness while larger values improve performance stability.
+            <strong>Can only be set before initialization!</strong>
+        </p>
+    </div>
 </body>
 </html>

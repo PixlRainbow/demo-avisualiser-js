@@ -22,6 +22,8 @@ var mergedAudioBuffer;
 var first_sample = true;
 var first_click = true;
 var canvasCtx;
+var skip_samples = 4;
+var audioBuffer_size = 1024;
 
 function display_warning(text){
     var message_box = $("<div></div>");
@@ -119,11 +121,11 @@ function dispatch_packet_ready(buf){
 function process_packet(event){
     var value = event.detail.wavData;
     audioBuffer.push(value);
-    drawBuffer.copyWithin(0, value.length/4 - 1);
+    drawBuffer.copyWithin(0, value.length/skip_samples - 1);
     //drawBuffer.set(value, drawBuffer.length - value.length);
     var offset = drawBuffer.length - value.length;
-    for(var i = 0; i < value.length; i+=4){
-        drawBuffer[offset + i/4] = value[i];
+    for(var i = 0; i < value.length; i+=skip_samples){
+        drawBuffer[offset + i/skip_samples] = value[i];
     }
     canvasCtx.clearRect(0, 0, WIDTH, HEIGHT);
     draw(drawBuffer);
@@ -143,19 +145,23 @@ function init_record(stream){
         $("#start").removeAttr("disabled");
     });
     $("#start").click(async function(){
+        var input_skip = $("#skip_samples").val();
+        skip_samples = input_skip == "" ? skip_samples : input_skip | 0;
         //https://developers.google.com/web/updates/2017/09/autoplay-policy-changes#webaudio
         //workaround: only construct AudioContext after user interaction
         if(first_click){
+            audioBuffer_size = $("#buffersize").val() | 0;
+            $("#buffersize").attr("disabled","");
             audioCtx = new AudioContext(encodingOptions);
             source = audioCtx.createMediaStreamSource(stream);
             if(AudioWorklet){
                 await audioCtx.audioWorklet.addModule("buffercopy-processor.js");
-                bufferCopyNode = new BufferCopyWorkletNode(audioCtx, dispatch_packet_ready);
+                bufferCopyNode = new BufferCopyWorkletNode(audioCtx, dispatch_packet_ready, audioBuffer_size);
                 source.connect(bufferCopyNode);
             }
             else{
                 console.log("AudioWorklet API not available. Falling back to ScriptProcessor");
-                scriptNode = audioCtx.createScriptProcessor(512, 1, 1);
+                scriptNode = audioCtx.createScriptProcessor(audioBuffer_size, 1, 1);
                 scriptNode.onaudioprocess = function(event){
                     var inputData = event.inputBuffer.getChannelData(0);
                     var outputData = event.outputBuffer.getChannelData(0);

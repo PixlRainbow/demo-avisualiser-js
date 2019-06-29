@@ -8,7 +8,7 @@ class BufferCopyProcessor extends AudioWorkletProcessor{
         this.first_sample = true;
     }
 
-    process(inputs, outputs, parameters){
+    process(inputs, outputs){
         const input = inputs[0];
         const output = outputs[0];
 
