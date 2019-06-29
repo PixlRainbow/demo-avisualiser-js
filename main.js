@@ -100,21 +100,26 @@ function decode_opus(buf){
 }
 
 /**
- * @summary listen to event "decodeDone" to catch this event
- * @param {ArrayBuffer} buf PCM encoded audio with WAV header
+ * @summary listen to event "packetAvailable" on audioCtx to catch this event
+ * @param {Float32Array} buf PCM audio
  */
-function dispatch_wav_ready(buf){
-    encoder.encode(buf);
-    var decodeDone = new CustomEvent("decodeDone",{
+function dispatch_packet_ready(buf){
+    //encoder.encode(buf);
+    var packetAvailable = new CustomEvent("packetAvailable",{
         detail: {
-            wavData: encoder.finish()
+            wavData: buf
         }
     });
-    mediaRecorder.dispatchEvent(decodeDone);
+    audioCtx.dispatchEvent(packetAvailable);
 }
 
-function process_packet(value){
-    audioBuffer.push(new Float32Array(value));
+/**
+ * 
+ * @param {CustomEvent<{wavData: Float32Array}>} event 
+ */
+function process_packet(event){
+    var value = event.detail.wavData;
+    audioBuffer.push(value);
     //console.dir(done);
     //console.dir(value);
     //value = value.slice((value.length/2 - 1) | 0);
@@ -167,13 +172,14 @@ function init_record(stream){
                     console.dir(inputData);
                     first_sample = false;
                 }
-                process_packet(inputData);
+                //process_packet(inputData);
+                dispatch_packet_ready(new Float32Array(inputData));
                 outputData.set(inputData);
             };
             destination = audioCtx.createMediaStreamDestination();
             source.connect(scriptNode);
             //scriptNode.connect(destination);
-            
+            audioCtx.addEventListener("packetAvailable", process_packet);
 
             mediaRecorder = new MediaRecorder(destination.stream);
             mediaRecorder.ondataavailable = function(event){
