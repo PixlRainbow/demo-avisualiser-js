@@ -146,7 +146,9 @@ function init_record(stream){
     });
     $("#start").click(async function(){
         var input_skip = $("#skip_samples").val();
-        skip_samples = input_skip == "" ? skip_samples : input_skip | 0;
+        skip_samples = input_skip == "" || input_skip == 0 
+            ? skip_samples
+            : input_skip | 0;
         //https://developers.google.com/web/updates/2017/09/autoplay-policy-changes#webaudio
         //workaround: only construct AudioContext after user interaction
         if(first_click){
