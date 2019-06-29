@@ -13,6 +13,7 @@ var audioCtx;
 var source;
 var destination;
 var scriptNode;
+var bufferCopyNode;
 var encoder;
 var decoder;
 var drawBuffer = new Float32Array(2**14);
@@ -148,7 +149,10 @@ function init_record(stream){
     $(".controls").removeAttr("disabled");
 
     $("#stop").click(function(){
-        scriptNode.disconnect(destination);
+        if(scriptNode)
+            scriptNode.disconnect(destination);
+        else
+            bufferCopyNode.disconnect(destination);
         mediaRecorder.stop();
         audioCtx.suspend();
 
@@ -158,26 +162,34 @@ function init_record(stream){
             $("#player").attr("src", URL.createObjectURL(playbackBuffer));
         });*/
     });
-    $("#start").click(function(){
+    $("#start").click(async function(){
         //https://developers.google.com/web/updates/2017/09/autoplay-policy-changes#webaudio
         //workaround: only construct AudioContext after user interaction
         if(first_click){
             audioCtx = new AudioContext(encodingOptions);
             source = audioCtx.createMediaStreamSource(stream);
-            scriptNode = audioCtx.createScriptProcessor(512, 1, 1);
-            scriptNode.onaudioprocess = function(event){
-                var inputData = event.inputBuffer.getChannelData(0);
-                var outputData = event.outputBuffer.getChannelData(0);
-                if(first_sample){
-                    console.dir(inputData);
-                    first_sample = false;
-                }
-                //process_packet(inputData);
-                dispatch_packet_ready(new Float32Array(inputData));
-                outputData.set(inputData);
-            };
+            if(AudioWorklet){
+                await audioCtx.audioWorklet.addModule("buffercopy-processor.js");
+                bufferCopyNode = new BufferCopyWorkletNode(audioCtx, dispatch_packet_ready);
+                source.connect(bufferCopyNode);
+            }
+            else{
+                console.log("AudioWorklet API not available. Falling back to ScriptProcessor");
+                scriptNode = audioCtx.createScriptProcessor(512, 1, 1);
+                scriptNode.onaudioprocess = function(event){
+                    var inputData = event.inputBuffer.getChannelData(0);
+                    var outputData = event.outputBuffer.getChannelData(0);
+                    if(first_sample){
+                        console.dir(inputData);
+                        first_sample = false;
+                    }
+                    //process_packet(inputData);
+                    dispatch_packet_ready(new Float32Array(inputData));
+                    outputData.set(inputData);
+                };
+                source.connect(scriptNode);
+            }
             destination = audioCtx.createMediaStreamDestination();
-            source.connect(scriptNode);
             //scriptNode.connect(destination);
             audioCtx.addEventListener("packetAvailable", process_packet);
 
@@ -220,7 +232,10 @@ function init_record(stream){
         encoder = new WavAudioEncoder(16000, 1);
 
         //start record and prevent re-click
-        scriptNode.connect(destination);
+        if(scriptNode)
+            scriptNode.connect(destination);
+        else
+            bufferCopyNode.connect(destination);
         mediaRecorder.start();
         $(this).attr("disabled","");
     });
