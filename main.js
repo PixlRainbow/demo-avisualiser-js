@@ -199,7 +199,7 @@ function init_record(stream){
 
             first_click = false;
         }else{
-            audioCtx.resume();
+            await audioCtx.resume();
         }
 
         //clear buffer and canvas
