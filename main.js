@@ -15,14 +15,14 @@ var destination;
 var scriptNode;
 var bufferCopyNode;
 var encoder;
-var drawBuffer = new Float32Array(2**14);
+var drawBuffer = new Float32Array(2**13);
 //var blobBuffer = [];
 var audioBuffer = [];
 var mergedAudioBuffer;
 var first_sample = true;
 var first_click = true;
 var canvasCtx;
-var skip_samples = 4;
+var skip_samples = 16;
 var audioBuffer_size = 1024;
 
 function display_warning(text){
