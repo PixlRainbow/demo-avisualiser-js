@@ -123,7 +123,7 @@ function process_packet(event){
     audioBuffer.push(value);
     drawBuffer.copyWithin(0, value.length/skip_samples - 1);
     //drawBuffer.set(value, drawBuffer.length - value.length);
-    var offset = drawBuffer.length - value.length;
+    var offset = drawBuffer.length - value.length/skip_samples;
     for(var i = 0; i < value.length; i+=skip_samples){
         drawBuffer[offset + i/skip_samples] = value[i];
     }
