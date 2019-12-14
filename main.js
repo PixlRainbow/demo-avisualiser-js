@@ -156,7 +156,7 @@ function init_record(stream){
             $("#buffersize").attr("disabled","");
             audioCtx = new AudioContext(encodingOptions);
             source = audioCtx.createMediaStreamSource(stream);
-            if(AudioWorklet){
+            if(window.AudioWorklet){
                 await audioCtx.audioWorklet.addModule("buffercopy-processor.js");
                 bufferCopyNode = new BufferCopyWorkletNode(audioCtx, dispatch_packet_ready, audioBuffer_size);
                 source.connect(bufferCopyNode);
